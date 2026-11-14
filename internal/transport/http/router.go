@@ -2,6 +2,8 @@ package http
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/recco-app/recco/internal/transport/http/handler"
 	"github.com/recco-app/recco/internal/transport/http/middleware"
@@ -35,6 +37,20 @@ func NewRouter(
 	mux.HandleFunc("GET /api/v1/shelf/queue", shelfHandler.ListQueue)
 	mux.HandleFunc("GET /api/v1/shelf", shelfHandler.ListShelf)
 	mux.HandleFunc("DELETE /api/v1/shelf/{id}", shelfHandler.DeleteEntry)
+
+	// Static Web Frontend (Single Page App fallback)
+	distDir := "web/dist"
+	if _, err := os.Stat(distDir); err == nil {
+		fileServer := http.FileServer(http.Dir(distDir))
+		mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+			path := filepath.Join(distDir, filepath.Clean(r.URL.Path))
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				http.ServeFile(w, r, filepath.Join(distDir, "index.html"))
+				return
+			}
+			fileServer.ServeHTTP(w, r)
+		})
+	}
 
 	// Apply Middlewares (Outer to Inner: CORS -> Recovery -> RequestLogger)
 	var h http.Handler = mux
