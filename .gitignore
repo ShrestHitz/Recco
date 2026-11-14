@@ -34,3 +34,9 @@ go.work.sum
 # OS files
 Thumbs.db
 .DS_Store
+
+# Frontend & Node
+node_modules/
+web/node_modules/
+web/dist/
+.npm/
