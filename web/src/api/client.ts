@@ -1,4 +1,4 @@
-import { APIResponse, Item, ItemType, ShelfEntry } from '../types';
+import { APIResponse, EnrichedMetadata, Item, ItemType, ShelfEntry } from '../types';
 
 const API_BASE = '';
 
@@ -32,6 +32,10 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 export const api = {
   checkHealth: async () => {
     return request<{ status: string; service: string; phase: string }>('/health');
+  },
+
+  enrichURL: async (rawURL: string) => {
+    return request<EnrichedMetadata>(`/api/v1/items/enrich?url=${encodeURIComponent(rawURL)}`);
   },
 
   createItem: async (input: {

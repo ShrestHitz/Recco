@@ -15,6 +15,17 @@ export interface Item {
 
 export type ShelfStatus = 'queued' | 'finished' | 'dropped';
 
+export interface EnrichedMetadata {
+  type: ItemType;
+  title: string;
+  creator: string;
+  cover_url: string;
+  external_url: string;
+  source_id: string;
+  description?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface ShelfEntry {
   id: string;
   user_id: string;

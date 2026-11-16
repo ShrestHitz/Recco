@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Bookmark, Inbox, Plus, X } from 'lucide-react';
+import { Bookmark, Inbox, Loader2, Plus, Sparkles, X } from 'lucide-react';
 import { ItemType } from '../types';
+import { api } from '../api/client';
 
 interface AddItemModalProps {
   isOpen: boolean;
@@ -35,13 +36,17 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onS
   const [rating, setRating] = useState<number>(8);
   const [take, setTake] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEnriching, setIsEnriching] = useState(false);
+  const [enrichSuccess, setEnrichSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  // Auto-detect type from URL
-  const handleUrlChange = (url: string) => {
+  // Auto-detect type & fetch rich metadata via Phase 2 pipeline
+  const handleUrlChange = async (url: string) => {
     setExternalUrl(url);
+    setEnrichSuccess(false);
+
     const lower = url.toLowerCase();
     if (lower.includes('youtube.com') || lower.includes('youtu.be')) {
       setType('youtube');
@@ -53,6 +58,26 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onS
       setType('anime');
     } else if (lower.includes('spotify.com') || lower.includes('apple.com/podcast')) {
       setType('podcast');
+    }
+
+    // If valid URL with protocol, attempt automated metadata enrichment
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      try {
+        setIsEnriching(true);
+        const res = await api.enrichURL(url);
+        if (res.success && res.data) {
+          const meta = res.data;
+          if (meta.title && !title) setTitle(meta.title);
+          if (meta.creator && !creator) setCreator(meta.creator);
+          if (meta.cover_url && !coverUrl) setCoverUrl(meta.cover_url);
+          if (meta.type) setType(meta.type);
+          setEnrichSuccess(true);
+        }
+      } catch {
+        // Silent fallback to manual entry
+      } finally {
+        setIsEnriching(false);
+      }
     }
   };
 
@@ -178,18 +203,59 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onS
 
           {/* External URL */}
           <div>
-            <label className="block text-xs font-semibold text-sand-700 uppercase tracking-wider mb-1">
-              External URL *
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-semibold text-sand-700 uppercase tracking-wider">
+                External URL *
+              </label>
+              {isEnriching && (
+                <span className="flex items-center gap-1 text-[11px] text-amber-700 font-medium">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>Extracting metadata...</span>
+                </span>
+              )}
+              {enrichSuccess && !isEnriching && (
+                <span className="flex items-center gap-1 text-[11px] text-emerald-700 font-medium">
+                  <Sparkles className="w-3 h-3" />
+                  <span>Auto-filled from source</span>
+                </span>
+              )}
+            </div>
             <input
               type="url"
               required
-              placeholder="e.g. https://www.youtube.com/watch?v=... or TMDB / Goodreads link"
+              placeholder="e.g. Paste YouTube, TMDB, Open Library, or AniList URL"
               value={externalUrl}
               onChange={(e) => handleUrlChange(e.target.value)}
               className="w-full px-3.5 py-2 rounded-xl border border-sand-300 focus:border-sand-800 text-sm text-sand-900 outline-none transition bg-white"
             />
           </div>
+
+          {/* Cover Art Live Preview if present */}
+          {coverUrl && (
+            <div className="p-3 bg-sand-50 rounded-xl border border-sand-200/80 flex items-center gap-3">
+              <img
+                src={coverUrl}
+                alt="Preview"
+                className="w-12 h-16 object-cover rounded-md border border-sand-200 flex-shrink-0 bg-sand-200"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] uppercase font-bold text-sand-500 tracking-wider">
+                  Metadata Preview
+                </span>
+                <p className="text-xs font-semibold text-sand-900 truncate">
+                  {title || 'Loading title...'}
+                </p>
+                {creator && (
+                  <p className="text-[11px] text-sand-600 truncate">
+                    by {creator}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Title & Creator */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
