@@ -12,6 +12,7 @@ import (
 	"github.com/recco-app/recco/internal/domain"
 	"github.com/recco-app/recco/internal/platform/config"
 	"github.com/recco-app/recco/internal/platform/database"
+	"github.com/recco-app/recco/internal/platform/enricher"
 	"github.com/recco-app/recco/internal/platform/logger"
 	"github.com/recco-app/recco/internal/repository/memory"
 	"github.com/recco-app/recco/internal/repository/postgres"
@@ -64,8 +65,17 @@ func main() {
 		shelfRepo = postgres.NewShelfRepo(pool)
 	}
 
-	// 4. Initialize Domain Services
-	itemService := service.NewItemService(itemRepo)
+	// 4. Initialize Domain Services & Metadata Enrichment Pipeline
+	ytProvider := enricher.NewYouTubeProvider(nil)
+	olProvider := enricher.NewOpenLibraryProvider(nil)
+	ogProvider := enricher.NewOpenGraphProvider(nil)
+	enrichmentService := service.NewEnrichmentService(24*time.Hour, 7*time.Second, ytProvider, olProvider, ogProvider)
+
+	log.Info("metadata enrichment pipeline initialized",
+		"providers", []string{ytProvider.Name(), olProvider.Name(), ogProvider.Name()},
+	)
+
+	itemService := service.NewItemService(itemRepo, enrichmentService)
 	shelfService := service.NewShelfService(shelfRepo, itemRepo)
 
 	// 5. Initialize HTTP Handlers & Router

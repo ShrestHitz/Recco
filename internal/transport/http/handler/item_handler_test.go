@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/recco-app/recco/internal/domain"
+	"github.com/recco-app/recco/internal/platform/enricher"
 	"github.com/recco-app/recco/internal/repository/memory"
 	"github.com/recco-app/recco/internal/service"
 	transporthttp "github.com/recco-app/recco/internal/transport/http"
@@ -18,7 +19,10 @@ func TestItemHandler_HTTP(t *testing.T) {
 	itemRepo := memory.NewItemRepo()
 	shelfRepo := memory.NewShelfRepo(itemRepo)
 
-	itemService := service.NewItemService(itemRepo)
+	ytProvider := enricher.NewYouTubeProvider(nil)
+	enrichmentSvc := service.NewEnrichmentService(0, 0, ytProvider)
+
+	itemService := service.NewItemService(itemRepo, enrichmentSvc)
 	shelfService := service.NewShelfService(shelfRepo, itemRepo)
 
 	itemHandler := handler.NewItemHandler(itemService)
@@ -72,5 +76,25 @@ func TestItemHandler_HTTP(t *testing.T) {
 	}
 	if getResp.StatusCode != http.StatusOK {
 		t.Errorf("expected status 200, got %d", getResp.StatusCode)
+	}
+
+	// 4. Test Metadata Enrichment endpoint: GET /api/v1/items/enrich?url=...
+	enrichResp, err := http.Get(server.URL + "/api/v1/items/enrich?url=https://youtu.be/dQw4w9WgXcQ")
+	if err != nil {
+		t.Fatalf("failed calling GET enrich: %v", err)
+	}
+	if enrichResp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200 for enrich, got %d", enrichResp.StatusCode)
+	}
+
+	var enrichAPIResp struct {
+		Success bool                    `json:"success"`
+		Data    domain.EnrichedMetadata `json:"data"`
+	}
+	if err := json.NewDecoder(enrichResp.Body).Decode(&enrichAPIResp); err != nil {
+		t.Fatalf("failed decoding enrich response: %v", err)
+	}
+	if enrichAPIResp.Data.Type != domain.ItemTypeYouTube {
+		t.Errorf("expected YouTube type, got %s", enrichAPIResp.Data.Type)
 	}
 }

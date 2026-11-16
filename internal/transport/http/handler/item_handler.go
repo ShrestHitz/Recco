@@ -85,3 +85,20 @@ func (h *ItemHandler) ListItems(w http.ResponseWriter, r *http.Request) {
 		"offset": filter.Offset,
 	})
 }
+
+// EnrichItem handles GET /api/v1/items/enrich?url=...
+func (h *ItemHandler) EnrichItem(w http.ResponseWriter, r *http.Request) {
+	targetURL := r.URL.Query().Get("url")
+	if targetURL == "" {
+		WriteError(w, domain.ErrInvalidInput)
+		return
+	}
+
+	enriched, err := h.svc.EnrichURL(r.Context(), targetURL)
+	if err != nil {
+		WriteError(w, err)
+		return
+	}
+
+	WriteJSON(w, http.StatusOK, enriched)
+}

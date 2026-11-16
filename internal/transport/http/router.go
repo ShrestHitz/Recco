@@ -21,11 +21,12 @@ func NewRouter(
 		handler.WriteJSON(w, http.StatusOK, map[string]interface{}{
 			"status":  "healthy",
 			"service": "recco-api",
-			"phase":   "phase-1-core-foundation-shelf",
+			"phase":   "phase-2-metadata-enrichment",
 		})
 	})
 
 	// Items Endpoints
+	mux.HandleFunc("GET /api/v1/items/enrich", itemHandler.EnrichItem)
 	mux.HandleFunc("POST /api/v1/items", itemHandler.CreateItem)
 	mux.HandleFunc("GET /api/v1/items", itemHandler.ListItems)
 	mux.HandleFunc("GET /api/v1/items/{id}", itemHandler.GetItem)

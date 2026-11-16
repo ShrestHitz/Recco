@@ -11,12 +11,17 @@ import (
 
 // ItemService handles business operations on cultural items.
 type ItemService struct {
-	repo domain.ItemRepository
+	repo     domain.ItemRepository
+	enricher domain.MetadataEnricher
 }
 
-// NewItemService creates a new ItemService.
-func NewItemService(repo domain.ItemRepository) *ItemService {
-	return &ItemService{repo: repo}
+// NewItemService creates a new ItemService with optional metadata enricher.
+func NewItemService(repo domain.ItemRepository, enricher ...domain.MetadataEnricher) *ItemService {
+	svc := &ItemService{repo: repo}
+	if len(enricher) > 0 {
+		svc.enricher = enricher[0]
+	}
+	return svc
 }
 
 // CreateItemInput contains parameters to register a new item.
@@ -32,6 +37,27 @@ type CreateItemInput struct {
 
 // CreateItem validates and registers a new item, deduplicating existing external URLs.
 func (s *ItemService) CreateItem(ctx context.Context, input CreateItemInput) (*domain.Item, error) {
+	// Auto-enrich missing fields if enricher is configured and fields are blank
+	if s.enricher != nil && input.ExternalURL != "" && (input.Title == "" || input.CoverURL == "" || input.Type == "") {
+		if enriched, err := s.enricher.Enrich(ctx, input.ExternalURL); err == nil && enriched != nil {
+			if input.Title == "" {
+				input.Title = enriched.Title
+			}
+			if input.Creator == "" {
+				input.Creator = enriched.Creator
+			}
+			if input.CoverURL == "" {
+				input.CoverURL = enriched.CoverURL
+			}
+			if input.Type == "" {
+				input.Type = enriched.Type
+			}
+			if input.SourceID == "" {
+				input.SourceID = enriched.SourceID
+			}
+		}
+	}
+
 	// 1. Check if external URL already exists to deduplicate catalog entries
 	if input.ExternalURL != "" {
 		existing, err := s.repo.GetByExternalURL(ctx, input.ExternalURL)
@@ -84,4 +110,12 @@ func (s *ItemService) GetItem(ctx context.Context, id uuid.UUID) (*domain.Item, 
 // ListItems returns a list of items based on filter criteria.
 func (s *ItemService) ListItems(ctx context.Context, filter domain.ItemFilter) ([]*domain.Item, error) {
 	return s.repo.List(ctx, filter)
+}
+
+// EnrichURL extracts and previews metadata for a URL without persisting it yet.
+func (s *ItemService) EnrichURL(ctx context.Context, rawURL string) (*domain.EnrichedMetadata, error) {
+	if s.enricher == nil {
+		return nil, errors.New("metadata enricher is not configured")
+	}
+	return s.enricher.Enrich(ctx, rawURL)
 }
